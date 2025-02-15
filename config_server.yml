@@ -1,0 +1,105 @@
+---
+- name: Configuration prometheus and Grafana
+  hosts: otus-prometheus
+  become: true
+
+  tasks:
+    - name: Change hostname
+      ansible.builtin.hostname:
+        name: otus-prom
+      notify: Reboot host
+    
+    - name: Update package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+    
+    - name: Install prometheus
+      ansible.builtin.apt:
+        name:
+          - prometheus
+        state: latest
+      notify: prometheus restart
+
+    - name: Copy prometheus.yml
+      ansible.builtin.copy:
+        src: ~/ansible/outs_promethes/prometheus.yml
+        dest: /etc/prometheus/prometheus.yml
+        owner: root
+        group: root
+        mode: '0644'
+        remote_src: no
+      notify: prometheus reload Configuration
+
+    - name: Download Grafana
+      ansible.builtin.get_url:
+        url: https://oddler.ru/images/com/soblog/items/2096/grafana-enterprise_10.2.0_amd64.deb
+        dest: /tmp/grafana-enterprise_10.2.0_amd64.deb
+
+    - name: Install Grafana
+      ansible.builtin.apt:
+        deb: /tmp/grafana-enterprise_10.2.0_amd64.deb
+        force: true
+      notify: Restart Grafana
+
+    - name: Provision Grafana datasource
+      ansible.builtin.copy:
+        src: ~/ansible/outs_promethes/datasource.yaml
+        dest: /etc/grafana/provisioning/datasources/datasource.yaml
+        owner: root
+        group: grafana
+        mode: '0640'
+        remote_src: no
+      notify: Restart Grafana
+
+    - name: Copy grafana dashboards Provision configs
+      ansible.builtin.copy:
+        src: ~/ansible/outs_promethes/dashboards/sample.yaml
+        dest: /etc/grafana/provisioning/dashboards/sample.yaml
+        owner: root
+        group: grafana
+        mode: '0644'
+        remote_src: no
+      notify: Restart Grafana
+
+    - name: create folder for dashboards
+      ansible.builtin.file:
+        path: /var/lib/grafana/dashboards
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: '0755'
+
+    - name: Provision Grafana dashboards
+      ansible.builtin.copy:
+        src: ~/ansible/outs_promethes/linux-node-exporter.json
+        dest: /var/lib/grafana/dashboards/linux-node-exporter.json
+        owner: grafana
+        group: grafana
+        mode: '0644'
+        remote_src: no
+      notify: Restart Grafana
+      
+
+  handlers:
+    - name: Reboot host
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+        connect_timeout: 600
+    
+    - name: Restart Grafana
+      ansible.builtin.systemd:
+        name: grafana-server.service
+        state: restarted
+        enabled: true
+
+    - name: prometheus restart
+      ansible.builtin.systemd:
+        name: prometheus.service
+        state: restarted
+        enabled: true
+
+    - name: prometheus reload Configuration
+      ansible.builtin.systemd:
+        name: prometheus.service
+        state: reloaded

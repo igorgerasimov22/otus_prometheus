@@ -1,0 +1,24 @@
+---
+- name: Configuration prometheus client
+  hosts: otus-client
+  become: true
+
+  tasks:
+  - name: Update package cache
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+
+  - name: Install node-exporter
+    ansible.builtin.apt:
+      name:
+        - prometheus-node-exporter
+      state: latest
+    notify: Restart prometheus-node-exporter
+
+  handlers:
+  - name: Restart prometheus-node-exporter
+    ansible.builtin.systemd:
+      name: prometheus-node-exporter
+      state: restarted
+      enabled: true
